@@ -19,7 +19,7 @@
 
 <br/>
 
-![MIR System Banner](docs/assets/banner.png)
+
 
 </div>
 

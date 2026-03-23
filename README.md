@@ -16,7 +16,6 @@
 
 <br/>
 
-[**Live Demo**](https://mir-system-demo.vercel.app) · [**API Docs**](https://mir-system.onrender.com/docs) · [**Architecture**](#architecture) · [**Quickstart**](#quickstart)
 
 <br/>
 

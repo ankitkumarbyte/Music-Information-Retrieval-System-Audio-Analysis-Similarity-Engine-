@@ -1,0 +1,76 @@
+# MIR System — Central Configuration
+# All values here can be overridden via environment variables.
+
+audio:
+  sample_rate: 22050           # Hz — librosa default
+  duration_seconds: 30.0       # Clips > this are centre-cropped
+  pad_short_clips: true
+  mono: true
+  max_file_size_mb: 50.0
+  allowed_formats:
+    - mp3
+    - wav
+    - flac
+    - ogg
+    - m4a
+    - aac
+    - opus
+
+preprocessing:
+  denoise: true
+  normalize_loudness: true
+  target_loudness_lufs: -23.0   # EBU R 128
+  trim_silence: true
+  trim_top_db: 60.0
+
+features:
+  n_mfcc: 40
+  n_mels: 128
+  n_fft: 2048
+  hop_length: 512
+  fmin: 0.0
+  fmax: null                    # null = sr/2
+  include_deltas: true
+  aggregate: true
+
+model:
+  embedding_dim: 256
+  num_genres: 10
+  num_instruments: 16
+  dropout: 0.3
+  checkpoint: "checkpoints/encoder_best.pth"
+  device: "cpu"                 # "cuda" for GPU inference
+
+faiss:
+  index_path: "data/faiss/index.faiss"
+  dim: 256
+  nlist: 256
+  M: 16                         # 0 to disable PQ compression
+  nbits: 8
+  nprobe: 32
+  use_gpu: false
+
+api:
+  host: "0.0.0.0"
+  port: 8000
+  workers: 4
+  rate_limit_max_requests: 100
+  rate_limit_window_seconds: 60
+  log_level: "INFO"
+
+database:
+  url: "postgresql+asyncpg://mir:secret@localhost:5432/mirdb"
+  pool_size: 20
+  max_overflow: 10
+
+redis:
+  url: "redis://localhost:6379/0"
+
+storage:
+  backend: "local"              # "local" | "s3" | "minio"
+  local_path: "data/audio"
+  bucket_name: "mir-audio"
+
+monitoring:
+  sentry_dsn: null              # Set via SENTRY_DSN env var
+  enable_prometheus: true

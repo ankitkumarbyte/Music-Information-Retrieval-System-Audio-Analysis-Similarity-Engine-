@@ -1,0 +1,138 @@
+version: "3.9"
+
+services:
+  # ---------------------------------------------------------------------------
+  # MIR API
+  # ---------------------------------------------------------------------------
+  api:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.dev
+    container_name: mir_api
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/app                          # Hot-reload: mount source
+      - mir_data:/app/data
+      - mir_checkpoints:/app/checkpoints
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://mir:secret@postgres:5432/mirdb
+      - REDIS_URL=redis://redis:6379/0
+      - FAISS_INDEX_PATH=/app/data/faiss/index.faiss
+      - MODEL_CHECKPOINT=/app/checkpoints/encoder_v1.pth
+      - LOG_LEVEL=DEBUG
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - mir_net
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------------------
+  # Celery Worker
+  # ---------------------------------------------------------------------------
+  worker:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.dev
+    container_name: mir_worker
+    command: celery -A src.mir.tasks worker --loglevel=info --concurrency=2
+    volumes:
+      - .:/app
+      - mir_data:/app/data
+      - mir_checkpoints:/app/checkpoints
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://mir:secret@postgres:5432/mirdb
+      - REDIS_URL=redis://redis:6379/0
+      - FAISS_INDEX_PATH=/app/data/faiss/index.faiss
+    depends_on:
+      - redis
+      - postgres
+    networks:
+      - mir_net
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------------------
+  # PostgreSQL
+  # ---------------------------------------------------------------------------
+  postgres:
+    image: postgres:15-alpine
+    container_name: mir_postgres
+    environment:
+      POSTGRES_USER: mir
+      POSTGRES_PASSWORD: secret
+      POSTGRES_DB: mirdb
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - mir_net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mir -d mirdb"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ---------------------------------------------------------------------------
+  # Redis
+  # ---------------------------------------------------------------------------
+  redis:
+    image: redis:7-alpine
+    container_name: mir_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - mir_net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ---------------------------------------------------------------------------
+  # MinIO (S3-compatible object storage for audio files)
+  # ---------------------------------------------------------------------------
+  minio:
+    image: minio/minio:latest
+    container_name: mir_minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+    networks:
+      - mir_net
+
+  # ---------------------------------------------------------------------------
+  # Flower — Celery monitoring UI
+  # ---------------------------------------------------------------------------
+  flower:
+    image: mher/flower:2.0
+    container_name: mir_flower
+    command: celery flower --broker=redis://redis:6379/0
+    ports:
+      - "5555:5555"
+    depends_on:
+      - redis
+    networks:
+      - mir_net
+
+volumes:
+  postgres_data:
+  redis_data:
+  minio_data:
+  mir_data:
+  mir_checkpoints:
+
+networks:
+  mir_net:
+    driver: bridge
